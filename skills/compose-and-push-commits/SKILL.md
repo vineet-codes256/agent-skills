@@ -19,10 +19,11 @@ You are a senior engineer who writes clean, atomic, reviewable git history. Your
 3. PLAN     — propose commit sequence + push target to the user; wait for approval
 4. COMMIT   — stage and commit each group in order
 5. VERIFY   — confirm clean tree, show final log
-6. PUSH     — push the new commits to the remote
+6. PUSH     — require typed confirmation, then push the new commits to the remote
 ```
 
-Never skip step 3. The user must approve the plan before any commit is created or pushed.
+Never skip step 3. The user must approve the plan before any commit is created.
+Never skip the confirmation in step 6. The remote is never touched without it.
 
 ---
 
@@ -102,7 +103,7 @@ Subject line rules (enforce these):
 - Format: `<type>: <what>` where type is one of: feat, fix, refactor, test, chore, style, docs, perf, migration
 - If the change touches a named surface or module, include it as scope: `feat(auth): add password reset flow`
 
-State the push target explicitly: "After committing, I will push to `<remote>/<branch>`."
+State the push target explicitly: "After committing, I will ask for final confirmation before pushing to `<remote>/<branch>`."
 
 Then ask: **"Does this grouping and push target look right? Any changes before I start committing?"**
 
@@ -152,7 +153,27 @@ Report the log to the user. If anything is unintentionally uncommitted, ask whet
 
 ## Step 6 — Push
 
-Only after the working tree is clean and every planned commit exists:
+Only after the working tree is clean and every planned commit exists.
+
+**Final confirmation gate.** Pushing is the one step that changes state outside this machine, so it requires its own explicit, typed confirmation — plan approval in step 3 does NOT count. Show the user exactly what is about to leave the machine:
+
+```
+About to push to <remote>/<branch>:
+
+  <hash> <subject line>
+  <hash> <subject line>
+  ...
+
+Type CONFIRM_REMOTE_CHANGE to push, or tell me what to change.
+```
+
+Then wait. Interpret the reply strictly:
+
+- The user types exactly `CONFIRM_REMOTE_CHANGE` → push.
+- The user replies with anything else — including "yes", "go", "looks good", or "push it" — do NOT push. Treat the reply as feedback: address it (reword a subject, regroup via interactive rebase is out of scope — instead create fixup work as new commits, or stop and explain), then show the updated commit list and ask for `CONFIRM_REMOTE_CHANGE` again.
+- The user declines or goes silent → leave the commits local and report that nothing was pushed.
+
+Once confirmed:
 
 1. If the branch has an upstream: `git push`
 2. If the branch has no upstream: `git push -u origin <branch>`
@@ -167,7 +188,7 @@ Push rules (never break these):
 - **Never force-push.** No `--force`, no `--force-with-lease`. If the push is rejected as non-fast-forward, stop and tell the user — suggest `git pull --rebase` but let them decide.
 - Push only the current branch. Never `git push --all`.
 - If there is no remote configured, stop and ask the user where to push.
-- If a pre-push hook fails, fix the issue (new commit, never --amend), then push again.
+- If a pre-push hook fails, fix the issue (new commit, never --amend). The commit list has now changed, so show it again and require a fresh `CONFIRM_REMOTE_CHANGE` before retrying.
 
 ---
 
@@ -196,4 +217,5 @@ Push rules (never break these):
 - No commit contains more than one logical change
 - No logical change is split across multiple commits (unless intentional and noted)
 - Pre-commit and pre-push hooks passed for every commit
-- The branch is pushed and `git status -sb` shows it level with its upstream
+- The user typed `CONFIRM_REMOTE_CHANGE` and the branch is pushed — `git status -sb` shows it level with its upstream
+- (If the user never confirmed: all commits exist locally, nothing was pushed, and the user was told so)
